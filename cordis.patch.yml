@@ -1,0 +1,55 @@
+# Host entry for bundle discovery.
+# The dedicated preset mounts the package's own agent entry into its scope,
+# so the model-facing tool catalog never inherits the host's generic tools.
+# The preset declaration is inline (rather than a shipped preset directory)
+# because dsh 0.2.0-rc.2 does not scan `presets/` from installed packages.
+- insert:
+    - id: serial-story
+      name: '@leeguanwei/dsh-serial-story'
+
+# ── Agent preset declaration ───────────────────────────────────────────────
+# Inline preset: the dsh-agent-preset Loader row id is `preset-<config.id>`.
+# Plugins below form the closed model-facing surface; no shell, generic file,
+# text-replace, or Code Mode tools are mounted per the plugin's hard contract.
+- insert:
+    - id: preset-short-story-writer
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: short-story-writer
+        name: 短篇集作家
+        description: 在共享的世界观下组织若干互相独立的短篇集,所有写操作经原生一次审批。
+        order: 50
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              # 只设 `prefix`:persona 的 rc.2 schema 是 { prefix, suffix, complete,
+              # includeRuntimeContext }。刻意**不**设 `complete: true` —— 那会让本
+              # persona 成为完整系统提示,丢掉同一预设里 dsh-agent-instructions 注册
+              # 的上下文分节。`{{cwd}}` 已在 prefix 内,故不再重复注册 suffix。
+              prefix: >-
+                You are 短篇集作家, a collaborative fiction-writing agent working in {{cwd}}.
+                The authoritative short-story project lives in the Host-managed store. Use
+                serial_read to inspect its current state and revisions. When the user wants a
+                project change, call serial_apply_change with exactly one closed typed mutation
+                (kind="initialize" once, only after a serial_read reports NOT_INITIALIZED;
+                otherwise kind="replace" carrying a recognized targetKind and, for collection-
+                scoped assets, a slug, and for chapter assets, a chapter). The baseRevision must
+                be copied verbatim from the most recent serial_read reply (use "absent" for a
+                missing non-manifest asset). A successful apply is pending user review in the
+                native one-shot approval gate; never claim that a proposal changed the project.
+                If serial_read or serial_apply_change fails, stop this request; do not retry,
+                probe, or substitute another write call. Never retry an unchanged apply after
+                receiving its pending receipt. If state changes while working, read again and
+                reconcile base revisions before issuing the next apply.
+                A chapter's blueprint comes BEFORE its draft: create the chapter-blueprint
+                (with characterIds and povCharacterId) first, then write the chapter-draft.
+                Appearance facts come only from collection blueprints and chapter blueprints;
+                a draft never records who appears in it, so skipping the blueprint makes that
+                character invisible to serial_read kind="appearances".
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: serial-agent
+            name: '@leeguanwei/dsh-serial-story/agent'

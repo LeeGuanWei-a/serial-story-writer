@@ -1,0 +1,370 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`keyless 端到端:写一本书 > 从零到一集可巡检,规范字节与各投影都被钉住 1`] = `
+{
+  "approvals": [
+    {
+      "kind": "ask",
+      "reason": "批准后仅修改这一个短篇集资产。",
+    },
+    {
+      "kind": "ask",
+      "reason": "批准后仅修改这一个短篇集资产。",
+    },
+    {
+      "kind": "ask",
+      "reason": "批准后仅修改这一个短篇集资产。",
+    },
+    {
+      "kind": "ask",
+      "reason": "批准后仅修改这一个短篇集资产。",
+    },
+    {
+      "kind": "ask",
+      "reason": "批准后仅修改这一个短篇集资产。",
+    },
+    {
+      "kind": "ask",
+      "reason": "批准后仅修改这一个短篇集资产。",
+    },
+    {
+      "kind": "ask",
+      "reason": "批准后仅修改这一个短篇集资产。",
+    },
+  ],
+  "canonicalAssets": {
+    "blueprint": {
+      "characterIds": [
+        "hiori",
+        "shen",
+      ],
+      "status": "in-progress",
+      "summary": "一个冬天里的一次演出。",
+      "targetWords": 12000,
+      "theme": "第一次被看见",
+      "threads": [
+        {
+          "id": "first-snow",
+          "summary": "开演那天的雪",
+          "title": "初雪",
+        },
+        {
+          "id": "silent-light",
+          "summary": "灯光师不肯说的话",
+          "title": "沉默的灯",
+        },
+      ],
+      "title": "初雪",
+    },
+    "chapterBlueprint": {
+      "chapter": 1,
+      "characterIds": [
+        "hiori",
+      ],
+      "keyBeats": [
+        "雪先落下来",
+        "灯亮",
+      ],
+      "notes": "",
+      "povCharacterId": "hiori",
+      "threadIds": [
+        "first-snow",
+      ],
+      "title": "开场",
+    },
+    "draft": "# 开场
+
+雪落在旧剧场的铁皮屋顶上。
+",
+    "project": {
+      "createdAt": "2026-10-03T09:00:00.000Z",
+      "creativeStrategy": "consistency-first",
+      "language": "zh-CN",
+      "tone": "克制",
+      "updatedAt": "2026-10-03T09:00:00.000Z",
+      "worldId": "11111111-2222-4333-8444-555555555555",
+      "worldName": "初雪",
+    },
+    "world": {
+      "era": "当代",
+      "glossary": [
+        {
+          "definition": "本季开演的日子",
+          "term": "初雪",
+        },
+      ],
+      "locations": [
+        "旧剧场",
+        "站前通",
+      ],
+      "notes": "",
+      "organizations": [
+        "剧场保存会",
+      ],
+      "rules": [
+        "演出只在冬季",
+        "一场戏一个视角",
+      ],
+      "setting": "海边小镇的旧剧场,冬天有雪。",
+    },
+  },
+  "denials": [
+    {
+      "kind": "deny",
+      "reason": "这次写入通不过校验,已跳过审批(无需批准):setting 必须是字符串,收到 number",
+    },
+  ],
+  "projections": {
+    "appearances": {
+      "appearances": [
+        {
+          "chapter": 0,
+          "characterId": "hiori",
+          "collectionSlug": "first-snow",
+        },
+        {
+          "chapter": 1,
+          "characterId": "hiori",
+          "collectionSlug": "first-snow",
+        },
+      ],
+      "characterId": "hiori",
+      "kind": "appearances",
+      "truncated": false,
+    },
+    "assetCharacterWorld": {
+      "bytes": 370,
+      "kind": "asset",
+      "omitted": false,
+      "revision": "83509dfd486ccb379e5bc70548fcecce638faa791c470244c13e5cb58de64a16",
+      "source": ".serial/world.json",
+      "target": {
+        "kind": "world",
+      },
+      "text": "{
+  "setting": "海边小镇的旧剧场,冬天有雪。",
+  "locations": [
+    "旧剧场",
+    "站前通"
+  ],
+  "notes": "",
+  "era": "当代",
+  "organizations": [
+    "剧场保存会"
+  ],
+  "rules": [
+    "演出只在冬季",
+    "一场戏一个视角"
+  ],
+  "glossary": [
+    {
+      "term": "初雪",
+      "definition": "本季开演的日子"
+    }
+  ]
+}
+",
+      "truncated": false,
+    },
+    "audit": {
+      "chapters": 1,
+      "collections": 1,
+      "findings": [
+        {
+          "code": "thread.unadvanced",
+          "detail": "故事线「沉默的灯」(silent-light)声明了但没有任何一章推进过它。",
+          "severity": "warning",
+          "where": "first-snow",
+        },
+      ],
+      "kind": "audit",
+      "truncated": false,
+    },
+    "chronicle": {
+      "characterId": "hiori",
+      "kind": "chronicle",
+      "ordered": [
+        {
+          "chapters": [
+            1,
+          ],
+          "collectionSlug": "first-snow",
+          "endDate": "2027-02-28",
+          "pov": true,
+          "season": "冬",
+          "startDate": "2026-11-01",
+          "title": "初雪",
+          "wholeCollection": true,
+        },
+      ],
+      "truncated": false,
+      "undated": [],
+    },
+    "export": {
+      "bytes": 193,
+      "chapters": 1,
+      "kind": "export",
+      "slug": "first-snow",
+      "text": "# 初雪
+
+> 主题:第一次被看见
+> 状态:in-progress
+> 时间:冬 · 2026-11-01 · 2027-02-28
+> 一个冬天里的一次演出。
+
+---
+
+## 开场
+
+雪落在旧剧场的铁皮屋顶上。
+",
+      "truncated": false,
+    },
+    "threads": {
+      "kind": "threads",
+      "threads": [
+        {
+          "advances": [
+            1,
+          ],
+          "collectionSlug": "first-snow",
+          "id": "first-snow",
+          "summary": "开演那天的雪",
+          "title": "初雪",
+        },
+        {
+          "advances": [],
+          "collectionSlug": "first-snow",
+          "id": "silent-light",
+          "summary": "灯光师不肯说的话",
+          "title": "沉默的灯",
+        },
+      ],
+      "truncated": false,
+    },
+    "world": {
+      "characters": [
+        {
+          "background": "剧场新人",
+          "goal": "站上舞台",
+          "id": "hiori",
+          "name": "灯织",
+          "role": "主角",
+          "summary": "怕生但认真",
+          "voice": "轻声",
+        },
+        {
+          "background": "本地人",
+          "goal": "守住旧剧场",
+          "id": "shen",
+          "name": "沈奕",
+          "role": "配角",
+          "summary": "沉默的灯光师",
+          "voice": "少言",
+        },
+      ],
+      "collections": [
+        {
+          "characterIds": [
+            "hiori",
+            "shen",
+          ],
+          "slug": "first-snow",
+          "status": "in-progress",
+          "summary": "一个冬天里的一次演出。",
+          "targetWords": 12000,
+          "theme": "第一次被看见",
+          "threads": [
+            {
+              "id": "first-snow",
+              "summary": "开演那天的雪",
+              "title": "初雪",
+            },
+            {
+              "id": "silent-light",
+              "summary": "灯光师不肯说的话",
+              "title": "沉默的灯",
+            },
+          ],
+          "title": "初雪",
+        },
+      ],
+      "kind": "world",
+      "truncated": false,
+    },
+  },
+  "receipts": [
+    {
+      "bytes": 253,
+      "newRevision": "63aafe46dcf4771a73df02eeb0fcb6d45d48e7c28196f7220e316ca5c9d0f0fb",
+      "oldRevision": "absent",
+      "target": {
+        "kind": "project",
+      },
+    },
+    {
+      "bytes": 370,
+      "newRevision": "83509dfd486ccb379e5bc70548fcecce638faa791c470244c13e5cb58de64a16",
+      "oldRevision": "absent",
+      "target": {
+        "kind": "world",
+      },
+    },
+    {
+      "bytes": 438,
+      "newRevision": "aae7f4639e5100bb4977924eed112a750a8f395ef316e01aa854330370a36333",
+      "oldRevision": "absent",
+      "target": {
+        "kind": "characters",
+      },
+    },
+    {
+      "bytes": 444,
+      "newRevision": "ebc8a2f2adc343e499901cd3a8bdabaf6aba6f1d9033af99f05f1889289522ef",
+      "oldRevision": "absent",
+      "target": {
+        "kind": "collection-blueprint",
+        "slug": "first-snow",
+      },
+    },
+    {
+      "bytes": 118,
+      "newRevision": "809ef65dcd960d4e22cd08f2432a54ac32b782305d6274afb0111d96914acddf",
+      "oldRevision": "absent",
+      "target": {
+        "kind": "collection-timeline",
+        "slug": "first-snow",
+      },
+    },
+    {
+      "bytes": 217,
+      "newRevision": "0502caa009de2c33ca6eca51410c619e2c945ddcc5753685792b250ac3d0a282",
+      "oldRevision": "absent",
+      "target": {
+        "chapter": 1,
+        "kind": "chapter-blueprint",
+        "slug": "first-snow",
+      },
+    },
+    {
+      "bytes": 50,
+      "newRevision": "8b23392d82adafce530b5edbd22976126a0618d445d90d16c1d12166384f3a50",
+      "oldRevision": "absent",
+      "target": {
+        "chapter": 1,
+        "kind": "chapter-draft",
+        "slug": "first-snow",
+      },
+    },
+  ],
+  "tree": [
+    ".serial/characters.json (438 B)",
+    ".serial/collections/first-snow/blueprint.json (444 B)",
+    ".serial/collections/first-snow/chapters/0001-blueprint.json (217 B)",
+    ".serial/collections/first-snow/chapters/0001.md (50 B)",
+    ".serial/collections/first-snow/timeline.json (118 B)",
+    ".serial/project.json (253 B)",
+    ".serial/world.json (370 B)",
+  ],
+}
+`;
