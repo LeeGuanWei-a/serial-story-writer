@@ -57,6 +57,10 @@ cannot get property "webServer" without inject
 
 ## 项目文件布局
 
+`.serial/` 目录在文件 Tab 里的真实形态:世界观级资产(`project.json` / `characters.json` / `world.json` / `inbox/`)与各短篇集目录并列;每集是独立子目录,内含蓝图、时间线、章蓝图与章正文。
+
+![.serial 目录在 Harness 文件 Tab 中的真实树状结构](docs/assets/文件夹结构.png)
+
 ```
 .serial/
 ├── project.json                    # 世界标识与创作方针
