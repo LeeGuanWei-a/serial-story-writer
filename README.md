@@ -194,12 +194,14 @@ V2 的 `serial_propose_change` 把**一条**修改建议写进 `.serial/inbox/`�
 ## 安装
 
 ```sh
-# 桌面应用:设置 → 插件 → 从目录/包名安装
+# 桌面应用:设置 → 插件 → 安装 bundle,目标填下面的 github 规格(或本仓库目录)
 # CLI 管理的 profile(如 web):
-dsh plugin --profile web add @leeguanwei/dsh-serial-story
+dsh plugin --profile web add github:LeeGuanWei-a/serial-story-writer
 dsh --profile web
 ```
 
+> **尚未发布到 npm**:`@leeguanwei/dsh-serial-story` 在 npm 上不存在,所以安装要用 `github:` 规格或本地目录。
+>
 > **`desktop` profile 只能由桌面应用安装**:`dsh plugin --profile desktop …` 会直接拒绝
 > (`profile "desktop" is managed exclusively by the Electron application`)。
 
