@@ -1,10 +1,35 @@
 # 短篇集作家 — DeepSeek Harness 插件
 
-> **状态**:`0.1.1`。目标运行时 `dsh 0.2.0-rc.2`。
+> **状态**:`0.2.0`。目标运行时 **`dsh 0.2.1-rc.2`**(`engines.dsh: ">=0.2.1-rc.2 <0.3.0-0"`)。
 >
-> **已落地**:项目文件层 · 模型面工具(V1 可写 / V2 提议)· 内联预设声明 · 只读工作台 · 非权威提案收件箱 · 跨集巡检与人物编年史。**105 个测试**,`node scripts/release-check.mjs` 一条命令跑完构建链、测试与打包面不变量。
+> **0.2.0 是运行时适配版**:领域模型、工具面与面板功能与 `0.1.1` 一致,改动集中在依赖线、**准入声明**与构建/校验链。**`0.1.1` 在 `0.2.1-rc.2` 上会被静默跳过**(见下)。
 >
-> **尚未落地**:面板内改稿(刻意不做,见下)· 批量跨集**写**作业 · 人物状态的跨集累计(缺承载字段)· `./agent-v2` 还没有挂进预设。
+> **已落地**:项目文件层 · 模型面工具(V1 可写 / V2 提议)· 内联预设声明 · 只读工作台 · 非权威提案收件箱 · 跨集巡检与人物编年史。**158 个测试**,`node scripts/release-check.mjs` 一条命令跑完构建链、测试与打包面不变量。
+>
+> **尚未落地**:面板内改稿(刻意不做,见下)· 批量跨集**写**作业 · 人物状态的跨集累计(缺承载字段)· `./agent-v2` 还没有挂进预设。升级候选与排期见 [`docs/features-and-progress.md`](docs/features-and-progress.md) §10。
+
+## ⚠️ 如果你从 `0.1.1` 升级:它不会报错,只会**消失**
+
+`0.1.1` 的 peer 全写 `0.1.0-rc.6`(当时唯一能装到的线),且没有 `engines.dsh`。dsh 的准入规则是:
+
+```
+有 engines.dsh → 由它单独裁决,peer 一律忽略
+否则 → 每个 @deepseek-ai/dsh / dsh-* peer 都必须满足运行时版本
+```
+
+于是运行时升到 `0.2.1-rc.2` 后,16 条 peer 全部不满足 → **整个 bundle 被跳过**,只进 `skippedBundles`,
+界面上不会出现任何错误:侧栏没有「短篇集工作台」,预设列表里也没有「短篇集作家」。
+
+profile 里那条 `…@0.1.1: ["0.2.0-rc.2"]` 的豁免救不了它 —— 豁免按"包名@版本 + 精确 DSH 版本"双键控,
+DSH 一升级就不再继承。
+
+`0.2.0` 的修法是让 `engines.dsh` 单独裁决,因此**不需要任何豁免**。实测(用目标运行时自己的
+`evaluatePluginCompatibility`,安装期与启动期共用这一个函数):
+
+| manifest | 结果 |
+|---|---|
+| `0.1.1` 形态 | `{"requirements":{"@deepseek-ai/dsh-agent":"0.1.0-rc.6"},"exempted":false}` → 拒绝 |
+| `0.2.0` 形态 | `undefined` → 接受 |
 
 本包在 DeepSeek Harness 上提供 **「世界观 → 多短篇集」** 项目格式：**世界观** 拥有共享人物档案与共享设定；**短篇集** 是该世界观下一部独立的作品，各自拥有蓝图、时间线与章节；同一位角色可以在多个短篇集里出演，身份通过**稳定 id** 引用，不复制、不重定义人物资料。
 
@@ -43,15 +68,17 @@ Client 半边注入 `['slots', 'remote', 'remote.workspaceFiles']`：`slots` 用
 
 ## 数据通道：Typert Remote，不是自建 HTTP 通道
 
-`dsh 0.2.0-rc.2` 有一个上游缺陷（[讨论 #5926](https://github.com/deepseek-ai/deepseek-harness/discussions/5926)）：第三方插件注册 HTTP 通道时，`connection.rpc.handle` 与 `webServer.register` 会走到同一段嵌套 inject，而 `dsh-client-connection` 自身的 `inject` 是 `["credentials"]` 而非 `["webServer"]`，激活时报：
+`dsh 0.2.0-rc.2` 曾有一个上游缺陷（[讨论 #5926](https://github.com/deepseek-ai/deepseek-harness/discussions/5926)）：第三方插件注册 HTTP 通道时，`connection.rpc.handle` 与 `webServer.register` 会走到同一段嵌套 inject，而 `dsh-client-connection` 自身的 `inject` 是 `["credentials"]` 而非 `["webServer"]`，激活时报：
 
 ```
 cannot get property "webServer" without inject
 ```
 
-**影响范围**：这只阻塞"注册一条新 HTTP 通道"这一种做法。它**不**阻塞浏览器读取项目状态 —— dsh 原生的 Typert Remote 是通的，而现成的 `workspaceFiles`（`@deepseek-ai/dsh-api-workspace-files`）正好满足只读工作台的全部需要：它**不暴露任何 mutation 操作**、路径以会话工作区为根（面板只传 `.serial/...` 这类相对路径）、并带文件变更订阅。
+**在 `0.2.1-rc.2` 上这条已消失**：`dsh-client-connection` 取 webserver 改成了可选查表 `ctx.get('webServer')`，注入断言不再触发。也就是说，现在自建通道是**可行的**。
 
-因此 Host 入口**不注册任何 loopback 通道**；`src/command-rpc.ts` 里的读端点保留为纯函数，上游修复后可直接复用。
+但本插件**仍然不建**：`workspaceFiles`(`@deepseek-ai/dsh-api-workspace-files`)正好满足只读工作台的全部需要 —— 它**不暴露任何 mutation 操作**、路径以会话工作区为根（面板只传 `.serial/...` 这类相对路径）、并带文件变更订阅。上游缺陷消失只是解掉了一个限制，并没有造出换掉这条通道的理由。
+
+因此 Host 入口**不注册任何 loopback 通道**；浏览器侧不存在任何写入端点。
 
 ---
 
@@ -167,9 +194,14 @@ V2 的 `serial_propose_change` 把**一条**修改建议写进 `.serial/inbox/`�
 ## 安装
 
 ```sh
+# 桌面应用:设置 → 插件 → 从目录/包名安装
+# CLI 管理的 profile(如 web):
 dsh plugin --profile web add @leeguanwei/dsh-serial-story
 dsh --profile web
 ```
+
+> **`desktop` profile 只能由桌面应用安装**:`dsh plugin --profile desktop …` 会直接拒绝
+> (`profile "desktop" is managed exclusively by the Electron application`)。
 
 插件自带一条**内联预设声明**（`cordis.patch.yml` 里的 `preset-short-story-writer`），在会话的预设选择器里选「短篇集作家」即可。预设只挂 persona、`agent-instructions` 与 `./agent` —— **不挂** shell、通用文件读写、文本替换或 Code Mode。
 
@@ -184,26 +216,27 @@ dsh --profile web
 ## 构建、测试与发布资质
 
 ```sh
-node scripts/ensure-pnpm-junctions.mjs   # 0.2.0-rc.2 未发布到 npm 的 dsh 子包
+pnpm install                              # 0.2.1 起 dsh 子包全部来自 npm,不再需要 junction 修补
 node node_modules/typescript/lib/tsc.js --noEmit -p tsconfig.json
+node scripts/clean-lib.mjs
 node node_modules/typescript/lib/tsc.js -p tsconfig.build.json
-node scripts/build-bundle.mjs            # Client 源码 → 宿主 __ModuleLoader__ 的 CJS 工厂包
+node scripts/build-bundle.mjs             # Client 源码 → 宿主 __ModuleLoader__ 的 CJS 工厂包
 node scripts/link-self.mjs
-node scripts/verify-built.mjs            # 产物契约校验
-npx vitest run                           # 105 passed
+node scripts/verify-built.mjs             # 准入 + 产物契约 + 面板 SSR 真渲染
+node node_modules/vitest/vitest.mjs run   # 158 passed
 ```
 
 **一条命令跑完上述全部,外加打包面不变量**：
 
 ```sh
-node scripts/release-check.mjs
+node scripts/release-check.mjs            # 51 项检查
 ```
 
-它在测试之外还断言：每个 `exports` 目标真实存在 · `files[]` 里声明的每个文件存在 · `README.md` 与 `LICENSE` 既存在又被声明 · `dsh.bundle.patch` 指向的文件存在 · `dsh.client` 声明了注入 · manifest 具备发布元数据 · 没有遗留临时文件 · **keyless 快照文件必须已存在**（否则 vitest 会新建它并判通过，漂移检测就被静默绕过了）。
+它在测试之外还断言：**准入判定通过**(直接调用运行时自己的 `evaluatePluginCompatibility`,不需要 exemption)· 每个 `exports` 目标真实存在 · `files[]` 里声明的每个文件存在 · `README.md` 与 `LICENSE` 既存在又被声明 · `dsh.bundle.patch` 指向的文件存在 · `dsh.client` 声明了 `platform` 且 `inject` 为空 · manifest 具备发布元数据 · 没有遗留临时文件 · **keyless 快照文件必须已存在**（否则 vitest 会新建它并判通过，漂移检测就被静默绕过了）。
 
 ### 两类端到端校验
 
-- **`scripts/verify-built.mjs`**：装载 Host 入口、断言内联预设声明的形状、用**目标运行时**导出的 `Config` 逐个校验预设子行配置、组一个与线上同构的 roster 断言预设被发现且整棵子行挂载成功、校验 Client 半边并**真渲染一次**工作台面板(SSR)。
+- **`scripts/verify-built.mjs`**：**准入判定**(直接调用目标运行时自己的 `evaluatePluginCompatibility`)→ 装载 Host 入口 → 断言内联预设声明的形状 → 用**目标运行时**导出的 `Config` 逐个校验预设子行配置 → 组一个与线上同构的 roster 断言预设被发现且整棵子行挂载成功 → 校验 Client 半边并**真渲染一次**工作台面板(SSR)。
 - **`tests/authoring-journey.spec.ts`（keyless 快照）**：全程没有模型、不需要 API key，用**模型真正会用的那一层**（`serial_read` / `serial_apply_change` 工具定义 + 真实文件系统）从零写完一集：initialize → 世界观 → 人物 → 蓝图(含故事线) → 时间线 → 章节蓝图 → 正文 → 六种读取投影。快照把**规范字节、修订号、审批决策与各投影形状**一并钉住。
 
 > **环境提示**：本机 `pnpm run <script>` 会先触发依赖同步，而该步骤在当前 profile 下会失败。因此上面的命令都直接调 `node`，不经 `pnpm run`。
@@ -213,7 +246,8 @@ node scripts/release-check.mjs
 - **不导入 `.vela` 项目。**
 - **一次审批只改一个资产**：没有多资产事务，因此没有批量跨集**写**作业。单文件原子替换是刻意保留的不变量。
 - **人物状态不跨集累计**：编年史只报告"在哪一集出现"，不报告"在这一集变成了什么样" —— 后者需要一个新的作者字段。
-- **peer 版本偏斜**：在 `dsh 0.2.0-rc.2` 上，插件 peer 声明为 `0.1.0-rc.6`，安装需要一次 exact-version exemption。这是 dsh 该版本的子包未发布到 npm 所致，不是本插件的选择。
+- **`engines.dsh` 上界是刻意收紧的**：`>=0.2.1-rc.2 <0.3.0-0` 不接受 `0.2.0-rc.2` —— 那一版配的是 `0.1.0-rc.6` 子包，本版没在上面验证过。上界写成 `<0.3.0-0` 而不是 `<0.3.0`，是因为在 `includePrerelease` 下后者会把 `0.3.0-rc.1` 也放进兼容区间。
+- **`dsh.client.inject` 是空数组**：它只为**动态**客户端包排激活顺序，而本插件的 bundle 只向宿主静态模块表要 `react`。列一个运行时并不存在的包(如已更名的 `dsh-client-runtime`)会让组合阶段判为缺失提供方。
 - **浏览器内激活尚未实测**：工作台的结构与渲染由构建期校验覆盖，但"在真实浏览器里点开面板"这一步需要在装了 Chrome 的环境里人工确认。
 - **发布资质不含真机浏览器冒烟**：那需要固定提交的 Harness 源仓与 Chrome 控制，不在本仓库的脚本范围内。本插件不修改 DeepSeek Harness 上游或 agent loop。
 

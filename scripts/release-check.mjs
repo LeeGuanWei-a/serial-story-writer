@@ -77,7 +77,6 @@ if (!existsSync(snapshot)) {
 checks.push('keyless 快照文件已存在')
 
 console.log('=== 构建链与测试 ===')
-run('准备 junction', process.execPath, ['scripts/ensure-pnpm-junctions.mjs'])
 run('类型检查', process.execPath, ['node_modules/typescript/lib/tsc.js', '--noEmit', '-p', 'tsconfig.json'])
 // 清理必须显式做:tsc 不会删除源文件已消失的产物,而那些陈旧 .js 会被 files 里的
 // `lib/**` 一起发布出去。
@@ -147,11 +146,23 @@ const patch = manifest.dsh?.bundle?.patch
 assert('dsh.bundle.patch 指向的文件存在',
   typeof patch === 'string' && existsSync(join(root, patch)), `收到 ${JSON.stringify(patch)}`)
 
-// 客户端半边必须真的声明了注入,否则插件在浏览器里起不来。
-assert('dsh.client 声明了 inject 与 platform',
-  Array.isArray(manifest.dsh?.client?.inject) && manifest.dsh.client.inject.length > 0
-    && typeof manifest.dsh?.client?.platform === 'string',
+// 客户端半边必须有可加载的声明:`platform` 决定它出现在哪个载体,`inject` 只为
+// **动态**客户端包排激活顺序。本插件的 bundle 只向静态模块表要 react,所以 inject
+// 恒为空数组;列一个运行时并不存在的包会让组合阶段判为缺失提供方,客户端半边就
+// 再也不会被加载。
+assert('dsh.client 声明了 platform 与空的 inject',
+  typeof manifest.dsh?.client?.platform === 'string'
+    && Array.isArray(manifest.dsh?.client?.inject) && manifest.dsh.client.inject.length === 0,
   JSON.stringify(manifest.dsh?.client))
+
+// 准入声明必须存在:没有 engines.dsh 时 DSH 会退化为逐个比对 @deepseek-ai/dsh-* 的
+// peer 范围,任何一条不满足就让 bundle **静默跳过**(只在 skippedBundles 里留一行)。
+assert('manifest 有 engines.dsh 准入范围', typeof manifest.engines?.dsh === 'string')
+for (const name of Object.keys(manifest.peerDependencies ?? {})) {
+  if (!name.startsWith('@deepseek-ai/dsh-')) continue
+  const installed = join(root, 'node_modules', name, 'package.json')
+  assert(`peer ${name} 在本仓库已安装`, existsSync(installed), '没有安装就无法在构建期验证目标运行时')
+}
 
 // 元数据:发布一个包该有的东西。
 for (const key of ['name', 'version', 'description', 'license', 'repository']) {

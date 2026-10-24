@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-/** End-to-end build that sidesteps pnpm run's automatic deps check.
-
-pnpm run re-runs install before each script and then removes the hoisted junctions
-tsc needs. This wrapper installs once, restores the junctions, and then drives tsc,
-the client bundler, link-self, and verify-built directly without invoking pnpm again.
-*/
+/**
+ * End-to-end build without going through `pnpm run`.
+ *
+ * `pnpm run <script>` re-runs a dependency sync before every script in this repo, so the
+ * chain is driven with `node` directly. Since 0.2.1 every dsh subpackage is published to
+ * npm, so no junction repair step is needed any more — a plain `pnpm install` produces the
+ * exact runtime the user runs.
+ */
 import { spawnSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -20,22 +22,9 @@ function run(label, command, args) {
   }
 }
 
-// 1. Install dependencies (skipping blocked postinstall scripts).
-run('pnpm install', 'pnpm', ['install', '--ignore-scripts'])
-
-// 2. Restore hoisted junctions for tools that look up the workspace node_modules.
-//    `ensure-pnpm-junctions.mjs` 是这组 junction 的**唯一来源**:它同时处理
-//    未发布到 npm 的 rc.2 dsh 子包(从 dsh 伞包提升),这里不再维护第二份列表。
-run('junctions', 'node', ['scripts/ensure-pnpm-junctions.mjs'])
-
-// 3. Type-check + declaration emit via tsc.
-run('tsc', 'node', ['node_modules/typescript/lib/tsc.js', '-p', 'tsconfig.build.json'])
-
-// 4. Bundle the Client CJS envelope.
-run('client bundler', 'node', ['scripts/build-bundle.mjs'])
-
-// 5. Symlink the package into node_modules so Cordis can find it.
-run('link-self', 'node', ['scripts/link-self.mjs'])
-
-// 6. Run verify-built to confirm the emitted bundle loads.
-run('verify-built', 'node', ['scripts/verify-built.mjs'])
+run('typecheck', process.execPath, ['node_modules/typescript/lib/tsc.js', '--noEmit', '-p', 'tsconfig.json'])
+run('clean', process.execPath, ['scripts/clean-lib.mjs'])
+run('emit', process.execPath, ['node_modules/typescript/lib/tsc.js', '-p', 'tsconfig.build.json'])
+run('client bundler', process.execPath, ['scripts/build-bundle.mjs'])
+run('link-self', process.execPath, ['scripts/link-self.mjs'])
+run('verify-built', process.execPath, ['scripts/verify-built.mjs'])

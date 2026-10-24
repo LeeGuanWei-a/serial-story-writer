@@ -9,14 +9,15 @@
  *
  * ## 为什么没有 loopback 通道
  *
- * `dsh 0.2.0-rc.2` 有个上游缺陷:第三方插件注册 HTTP 通道时,`connection.rpc.handle`
+ * `dsh 0.2.0-rc.2` 曾有一个上游缺陷:第三方插件注册 HTTP 通道时,`connection.rpc.handle`
  * 与 `webServer.register` 会走到同一段嵌套 inject(`dsh-client-connection` 自己的 inject
  * 是 `["credentials"]` 而非 `["webServer"]`),激活时报 `cannot get property "webServer"
- * without inject`。
+ * without inject`。`0.2.1-rc.2` 已改用可选查表 `ctx.get('webServer')`,那条断言不再触发,
+ * 所以现在自建通道是**可行**的。
  *
- * 早期版本为此准备了一套 loopback 读端点作为"等上游修复"的储备。**该储备已删除**:
- * 浏览器侧的只读工作台改走 dsh 原生的 Typert Remote(`workspaceFiles`),那条路是通的,
- * 而且只读、以会话工作区为根。既然那条路不再需要,留一份永不挂载的处理器只是死代码。
+ * 但本插件仍然不建:浏览器侧的只读工作台走 dsh 原生的 Typert Remote(`workspaceFiles`),
+ * 那条路是通的,而且只读、以会话工作区为根、自带变更订阅。既然那条路够用,多一条自建
+ * 通道就是多一处没人审的写入口。
  */
 
 import type { Context } from '@deepseek-ai/cordis'

@@ -1,4 +1,22 @@
-/** Verify that Cordis loads the emitted Host entry and the inline preset declaration. */
+/**
+ * 产物契约校验:确认 Cordis 能装载 Host 入口、内联预设声明能被目标运行时发现并整棵挂载。
+ *
+ * ## 为什么这里只认一套运行时
+ *
+ * 0.1.x 时代 dsh 的子包没有发布到 npm,工作区只能装 0.1.0-rc.6,而运行时是 0.2.0-rc.2,
+ * 于是本脚本必须从"伞包 `@deepseek-ai/dsh` 的嵌套树"里另取一份 rc.2 来做校验,还要
+ * 用 junction 影子目录让 fixture 解析到那一份。**0.2.1 起子包已全部上 npm**,因此工作区
+ * 的 `node_modules` 就是用户机器上运行的那套:同一版本、同一份 schema。两代运行时的
+ * 兼容层因此被整段删除。
+ *
+ * ## 它还守住一条最容易失效的契约
+ *
+ * DSH 在装载 bundle 层之前会做**准入判定**(见 `dsh-app-boot` 的 `unmetRequirements`):
+ * 插件若有 `engines.dsh` 就必须满足它;否则退化为逐个检查 `@deepseek-ai/dsh` /
+ * `@deepseek-ai/dsh-*` 的 peer 范围。任何一条不满足,bundle 会被**静默跳过**,只有在
+ * `skippedBundles` 里留一行。0.1.1 正是这样在 0.2.1-rc.2 上消失的 —— 所以这里用与
+ * 上游完全相同的判定(含 `includePrerelease`)在构建期断言一次。
+ */
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -8,14 +26,17 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { Context } from '@deepseek-ai/cordis'
 import Include, { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
+import { evaluatePluginCompatibility } from '@deepseek-ai/dsh-app-boot'
 import yaml from 'js-yaml'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-// 目标运行时(dsh 0.2.0-rc.2)自带的子包。工作区 `node_modules/@deepseek-ai/*` 是
-// 0.1.0-rc.6 线,两者 schema 不兼容(§6.5),所以花名册校验必须用**运行时那一套**。
-const runtimeRoot = join(root, 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai')
-/** 从运行时树导入一个包。 */
+/** 目标运行时树:工作区安装的 dsh 子包,与用户机器上的运行时逐版本一致。 */
+const runtimeRoot = join(root, 'node_modules', '@deepseek-ai')
+/** 从目标运行时树导入一个包。 */
 const importRuntime = (name, file = 'lib/index.js') => import(pathToFileURL(join(runtimeRoot, name, file)).href)
+/** 读取一个包的 manifest。 */
+const runtimeManifest = async name => JSON.parse(await readFile(join(runtimeRoot, name, 'package.json'), 'utf8'))
+
 const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
 for (const packagedLicenseFile of ['LICENSE']) {
   await readFile(join(root, packagedLicenseFile), 'utf8')
@@ -23,6 +44,21 @@ for (const packagedLicenseFile of ['LICENSE']) {
     throw new Error(`${packagedLicenseFile} must be declared in package files`)
   }
 }
+
+// ── 准入判定:直接调用目标运行时自己的评估器 ─────────────────────────────────
+// 两处闸门用的都是同一个函数,所以这里既覆盖**安装期**(plugin-manager 的
+// `evaluatePluginCompatibility` 预检)也覆盖**启动期**(app-boot 装载 bundle 层前的
+// 判定):有 `engines.dsh` 时由它单独裁决、peer 一律忽略;否则每个
+// `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*` peer 都必须满足。
+//
+// 空白的 exemption 列表是刻意的:用户机器上不该需要一次豁免。
+const dshRuntime = await runtimeManifest('dsh')
+const runtimeVersion = dshRuntime.version
+const issue = evaluatePluginCompatibility(manifest, [])
+if (issue !== undefined) {
+  throw new Error(`The target runtime ${runtimeVersion} rejects ${manifest.name}@${manifest.version} at install time: ${JSON.stringify(issue)}. DSH would refuse to install it (or silently skip the bundle) without an exemption.`)
+}
+
 const clientSource = await readFile(join(root, 'lib', 'client.js'), 'utf8')
 let clientHandoff
 runInNewContext(clientSource, {
@@ -44,14 +80,18 @@ const clientExports = clientHandoff.factory(specifier => {
 if (typeof clientExports.apply !== 'function' || 'default' in clientExports) {
   throw new Error('The emitted Client factory must return named apply without a default export')
 }
-// The Client half is a Cordis client plugin: it must declare `inject` and must reach the
-// host only through `ctx.slots` + the Remote carrier. A regression here previously produced
-// a `failed` client fiber ("web boot: 1 entry did not activate") because apply() assumed
-// DOM mount points. `remote.workspaceFiles` is the dotted sub-service that guarantees the
-// read-only namespace is bound before the workbench panel asks for it.
+// Client 半边是一个 Cordis 客户端插件:必须声明 `inject`,并且只经 `ctx.slots` 与
+// Remote 载体触达宿主。`remote.workspaceFiles` 是点号子服务 —— 注入它即保证只读
+// 文件命名空间在工作台面板索取之前已绑定。
 const expectedInject = ['slots', 'remote', 'remote.workspaceFiles']
 if (JSON.stringify(clientExports.inject) !== JSON.stringify(expectedInject)) {
   throw new Error(`The emitted Client plugin must inject ${expectedInject.join(', ')}, got ${JSON.stringify(clientExports.inject)}`)
+}
+// `dsh.client.inject` 只用于给**动态**客户端包排激活顺序。本插件的 bundle 只向宿主
+// 的静态模块表要 react,不引用任何 Harness 客户端包,所以它必须是空数组 —— 列一个
+// 运行时并不存在的包会让组合阶段判为缺失提供方。
+if (!Array.isArray(manifest.dsh?.client?.inject) || manifest.dsh.client.inject.length !== 0) {
+  throw new Error(`dsh.client.inject must be an empty array (the bundle imports no Harness Client package), got ${JSON.stringify(manifest.dsh?.client?.inject)}`)
 }
 const registrations = []
 const registeredComponents = []
@@ -72,9 +112,9 @@ const expectedSlots = ['sidebar.panellist', 'main']
 if (JSON.stringify(registrations) !== JSON.stringify(expectedSlots)) {
   throw new Error(`The emitted Client plugin must register into ${expectedSlots.join(' and ')}, got ${JSON.stringify(registrations)}`)
 }
-// A component that reaches `slots.register` as undefined renders as React error #130
-// ("Element type is invalid ... got: undefined") and crashes the slot entry. Also invoke
-// each component once with plausible owner props to prove it returns a real React element.
+// 到达 `slots.register` 的组件若是 undefined,浏览器里表现为 React #130
+// ("Element type is invalid ... got: undefined")并打崩该 slot 条目。这里逐个调用一次
+// 证明它返回真实的 React 元素。
 for (const { registration, component } of registeredComponents) {
   const where = `${registration.name}/${registration.id ?? registration.key}`
   if (typeof component !== 'function') {
@@ -85,9 +125,9 @@ for (const { registration, component } of registeredComponents) {
     throw new Error(`The component registered into ${where} did not return a React element`)
   }
 }
-// 更强的一条:把主面板真渲染一次。直接调用函数组件只能证明"返回了元素",而
-// 包装里那个组件是否在 hook 顺序、空数据分支上站得住,只有真走一遍 React 才知道。
-// SSR 不跑 useEffect,所以这里既覆盖了渲染又不发任何 Remote 调用。
+// 更强的一条:把主面板真渲染一次。直接调用函数组件只能证明"返回了元素",而包装里
+// 那个组件是否在 hook 顺序、空数据分支上站得住,只有真走一遍 React 才知道。SSR 不跑
+// useEffect,所以这里既覆盖了渲染又不发任何 Remote 调用。
 const mainComponent = registeredComponents.find(entry => entry.registration.name === 'main')?.component
 const markup = renderToStaticMarkup(mainComponent({}))
 if (!markup.includes('短篇集工作台')) {
@@ -105,9 +145,8 @@ const patchPath = join(root, manifest.dsh.bundle.patch)
 const patches = yaml.load(await readFile(patchPath, 'utf8'), { schema: entryListSchema })
 if (!Array.isArray(patches)) throw new TypeError(`${patchPath} must contain a YAML list`)
 
-// M3 ships the preset via an inline `@deepseek-ai/dsh-agent-preset` row in
-// `cordis.patch.yml`. dsh 0.2.0-rc.2 does not scan a `presets/` directory from
-// installed packages, so the inline row is the only discovery path.
+// 预设以 `@deepseek-ai/dsh-agent-preset` 的内联行随 `cordis.patch.yml` 分发。目标
+// 运行时不会扫描已安装包里的 `presets/` 目录,所以内联行是唯一的发现路径。
 const presetRows = patches.flatMap(patch => {
   if (Array.isArray(patch)) return patch
   if (patch && typeof patch === 'object' && 'insert' in patch) return patch.insert
@@ -141,10 +180,9 @@ if (agentEntry === undefined) {
 
 // 逐行用**目标运行时**导出的 `Config` schema 校验子行配置。
 //
-// 本工作区的 `node_modules/@deepseek-ai/*` 仍是 0.1.0-rc.6 线(见 §6.3 的 peer 版本
-// 偏差),而运行时是 0.2.0-rc.2;两者的 `@deepseek-ai/dsh-persona` schema 不同
-// (rc.6 要 `text`,rc.2 要 `prefix`)。因此这里显式从运行时树解析包,验证的是
-// 「组合在真实运行时上合法」,而不是本地那份过期副本的 schema。
+// 这一条守的是"预设能不能挂":persona / agent-instructions 的 schema 在版本之间真的
+// 变过(0.1.0-rc.6 要 `text`,0.2 线要 `prefix`)。配置写错时上游不会在安装时报错,
+// 而是让整棵预设挂在 `broken` 状态 —— 必须在构建期抓住。
 /** 预设子行名 → 运行时包目录中的入口文件。 */
 function runtimeEntryFor(specifier) {
   if (specifier === '@leeguanwei/dsh-serial-story/agent') return join(root, 'lib', 'agent.js')
@@ -200,30 +238,29 @@ try {
   await host.fiber.dispose()
 }
 
-// 用**运行时自己的 rc.2 包**组一个与线上同构的 Cordis roster,再断言内联预设
-// 经注册表被发现且**整棵子行挂载成功**。这里刻意不复用工作区那份 rc.6 依赖:
-// 混用两代包会让"挂载成功"这句话失去意义(§6.5)。
-//
-// 本插件自己的 `./agent` 仍从工作区解析 —— 与线上一致(profile 以 link: 装本
-// 包,Node 因此用本包自己的 rc.6 依赖去调宿主的 rc.2 服务)。这正是要验的东西。
-const { Context: RuntimeContext } = await importRuntime('cordis')
-const { default: RuntimeLoader } = await importRuntime('cordis-plugin-loader')
-const { default: RuntimeInclude } = await importRuntime('cordis-plugin-include')
+// 用目标运行时自己的包组一个与线上同构的 Cordis 花名册,再断言内联预设经注册表被
+// 发现、且**整棵子行挂载成功**。这里刻意复用工作区依赖:它已经不是"另一代"了,而
+// 就是用户机器上运行的那一套。
 const { default: RuntimePresetRegistry } = await importRuntime('dsh-agent-preset-registry')
 const { default: RuntimeAgentRegistry } = await importRuntime('dsh-agent')
 const { default: RuntimeSessionProjections } = await importRuntime('dsh-session-projection')
 const { default: RuntimeSystemPrompt } = await importRuntime('dsh-system-prompt')
 const { default: RuntimeToolRuntime } = await importRuntime('dsh-tools')
 
-const roster = new RuntimeContext()
+const roster = new Context()
 roster.baseUrl = pathToFileURL(root).href + '/'
-await roster.plugin(RuntimeLoader)
-roster.loader.builtins.include = RuntimeInclude
+await roster.plugin(Loader)
+roster.loader.builtins.include = Include
 await roster.plugin(RuntimeSessionProjections)
 await roster.plugin(RuntimeSystemPrompt)
 await roster.plugin(RuntimeToolRuntime)
 await roster.plugin(RuntimeAgentRegistry)
 await roster.plugin(RuntimePresetRegistry, { default: 'short-story-writer' })
+// `dsh-agent-instructions`(0.2.1 起)注入 `workingDirectory`。真实的 workspace 目录
+// 服务会连带拖进 fs / sandbox 整套,而这里只需要"预设子行能挂载"这一条证据:该包在
+// 缺少 `ctx.fs` provider 时按设计退化为 no-op,`ensure` 根本不会被调用,所以要给它
+// 一个到位的服务占位,而不是伪造文件系统行为。
+roster.provide('workingDirectory', { ensure: async () => undefined })
 try {
   await roster.loader.create({
     name: 'cordis:include',
@@ -241,8 +278,8 @@ try {
   if (preset.name !== '短篇集作家') {
     throw new Error(`The inline preset display name is wrong: ${JSON.stringify(preset)}`)
   }
-  // 零诊断 = 整棵子行(persona / agent-instructions / 本插件的 ./agent)在目标
-  // 运行时上真的挂载成功。这是"预设能不能用"最直接的机器证据。
+  // 零诊断 = 整棵子行(persona / agent-instructions / 本插件的 ./agent)在目标运行时
+  // 上真的挂载成功。这是"预设能不能用"最直接的机器证据。
   if (preset.broken !== undefined) {
     throw new Error(`The inline preset did not mount cleanly on the target runtime: ${preset.broken}`)
   }

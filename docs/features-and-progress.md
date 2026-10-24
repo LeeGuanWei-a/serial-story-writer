@@ -1,7 +1,8 @@
 # 短篇集作家插件 — 功能规划与实现进度
 
-> **快照信息**:版本 `0.1.1` · 目标运行时 `dsh 0.2.0-rc.2` · 仓库 `F:\Projects\serial-story-writer`
+> **快照信息**:版本 `0.2.0` · 目标运行时 `dsh 0.2.1-rc.2` · 仓库 `F:\Projects\serial-story-writer`
 > **本文性质**:功能范围与进度的**当前快照**。进度只依据可复现的证据(源码、测试、构建校验)标注,不依据意图。
+> **0.2.0 版的边界**:本版是**运行时适配版**(0.2.0-rc.2 → 0.2.1-rc.2)。领域模型、工具面、面板功能与 0.1.1 一致,变化集中在依赖线、准入声明与构建/校验链(见 §6.18)。
 
 ---
 
@@ -70,8 +71,7 @@
 |---|---|---|
 | 插件被 Profile 识别并激活 | ✅ | `fiberPhase: active`,启动无 `did not activate` |
 | Host 配置 | ✅ | 空 schema;`presetRoot` 随目录发布机制一同移除(§6.2) |
-| loopback 读端点实现 | ✅ | `src/command-rpc.ts` 为**纯函数**,不依赖宿主 |
-| loopback 通道注册 | ⛔ | 受 dsh 上游缺陷阻塞(见 §6.1) |
+| loopback 通道注册 | ⛔ | **0.2.1 起技术上已可行**(§6.1),但**刻意不做**:浏览器侧不需要写入口 |
 | 浏览器侧 mutation 端点 | ⛔ | **刻意不做**:写入只能走原生审批 |
 
 ### 4.2 项目文件层(`src/serial-project.ts`)
@@ -157,9 +157,10 @@
 | Client 契约断言(4 层) | ✅ | 注入精确为 `slots` + `remote` + `remote.workspaceFiles`、注册落点、组件是函数、组件返回合法 React 元素 |
 | 面板真渲染断言 | ✅ | 不只调用函数:用 **SSR 真渲染一次**工作台面板。这条当场抓到过一个真 bug —— 包装里曾**直接调用**组件而不是 `createElement`,会让 hook 在非组件上执行,浏览器里必崩(§6.11) |
 | 内联预设声明断言 | ✅ | 行存在、`config.id`/`name` 正确、挂载 `./agent`、不含 shell/通用文件/文本替换/Code Mode 工具;并用**目标运行时**导出的 `Config` 逐个校验子行配置(§6.5) |
-| 预设发现断言 | ✅ | 用**运行时自己的 rc.2 包**（cordis 4.0.4 + 四个宿主服务 + `dsh-agent-preset-registry`）组一个与线上同构的 roster，断言:预设经注册表 `list()` 出现在花名册、`broken` 为空、`compositionInventory()` 三行全部 `fiberState: ACTIVE` |
-| 预设子行解析对齐运行时 | ✅ | `tests/fixtures/node_modules` 影子把 persona / agent-instructions 解析到运行时 rc.2 副本(§6.5);本插件 `./agent` 仍按线上方式从工作区解析,即用自己的 rc.6 依赖调宿主 rc.2 服务 |
-| 单元/集成测试 | ✅ | **105 个**,见 §8 的表 |
+| **准入声明断言** | ✅ | 直接调用目标运行时自己的 `evaluatePluginCompatibility(manifest, [])`(安装期 plugin-manager 与启动期 app-boot 共用这一个函数),断言**不需要任何 exemption** 就能装上并装载。这条守的是 0.2.0 版栽过的坑(§6.18) |
+| 预设发现断言 | ✅ | 用**目标运行时自己的包**(cordis 4.0.5 + `dsh-tools` / `dsh-system-prompt` / `dsh-session-projection` / `dsh-agent` / 预设注册表)组一个与线上同构的 roster,断言:预设经注册表 `list()` 出现在花名册、`broken` 为空 |
+| 预设子行解析对齐运行时 | ✅ | 0.2.1 起 dsh 子包全部上 npm,工作区 `node_modules` 就是用户机器上那一套,**不再需要两代运行时的影子 junction**(§6.18) |
+| 单元/集成测试 | ✅ | **158 个**,见 §8 的表 |
 | **keyless 快照测试** | ✅ | `tests/authoring-journey.spec.ts`:全程无模型、无 API key,用模型真正会用的工具层从零写完一集,快照钉住规范字节/修订号/审批决策/各投影(§6.14) |
 | **发布资质脚本** | ✅ | `scripts/release-check.mjs`:一条命令跑完构建链 + 测试 + **打包面不变量**(exports 可解析、files 声明存在、keyless 快照必须先存在)。**真机浏览器冒烟仍不在范围内** —— 它需要固定提交的 Harness 源仓与 Chrome 控制 |
 
@@ -210,7 +211,7 @@ M3 交付内容:
 
 ## 6. 已知缺陷与阻塞
 
-### 6.1 上游:dsh 0.2.0-rc.2 的 loopback 回归 ⛔
+### 6.1 上游:dsh 0.2.0-rc.2 的 loopback 回归 ⛔→🟢 0.2.1-rc.2 已消失
 
 第三方插件注册 HTTP 通道时,`connection.rpc.handle` 与 `webServer.register` 会走到同一段嵌套 inject,而 `dsh-client-connection` 自身的 `inject` 列表是 `["credentials"]` 而非 `["webServer"]`,于是激活时报:
 
@@ -220,9 +221,9 @@ cannot get property "webServer" without inject
 
 这是 dsh 自身的缺陷([上游讨论 #5926](https://github.com/deepseek-ai/deepseek-harness/discussions/5926)),不是本插件的代码问题。
 
-**影响范围(M5 通道判定后已收窄)**:该缺陷只阻塞**注册一条新的 HTTP 通道**这一种做法。它**不**阻塞浏览器读取项目状态 —— dsh 原生还有 Typert Remote 这条路,而且现成可用的一个正好满足只读工作台的全部需要。详见 §6.9。
+**0.2.1-rc.2 的现状**:`dsh-client-connection` 仍声明 `inject = ["credentials"]`,但取 webserver 已改为可选查表 `this.owner.get("webServer")` / `this.ctx.get("webServer")`,那条注入断言不再触发。也就是说,现在**自己注册一条 HTTP 通道是可行的**。
 
-**应对**:Host 入口不注册任何 loopback 通道;读端点已实现为纯函数,上游修复后可直接复用,无需重写。M5a 走 §6.9 的 Remote 通道,不必等上游。
+**这仍然是设计选择而不是限制**:数据通道继续走 Typert Remote(`workspaceFiles`),理由不变 —— 它只读、以会话工作区为根、自带变更订阅(§6.9)。上游缺陷消失并不产生改用自建通道的理由;真要改,收益与代价见 §10 的 U-6。
 
 ### 6.9 M5 数据通道:M5a 不被上游阻塞(步 2 判定)
 
@@ -282,14 +283,17 @@ ctx.remote.workspaceFiles.changes(sessionId, '.serial', lifetime)               
 
 **修复(M3 已落地)**:`cordis.patch.yml` 内联声明预设;目录发布机制的全部产物(`src/preset-installer.ts`、`scripts/install-preset.mjs`、`presets/`、`presetRoot` 配置、`preset/status` 与 `preset/install` 端点)已删除。
 
-### 6.3 环境:peer 版本不一致 🟡
+### 6.3 环境:peer 版本不一致 ✅ 已解决(0.2.0)
 
-插件声明 peer 为 `0.1.0-rc.6`,而运行时是 `0.2.0-rc.2`;`dsh` 拒绝安装并要求签发 exact-version exemption(已记录在 `profiles/web/compatibility.json`)。根因是 `0.2.0-rc.2` 的 dsh 子包**未发布到 npm**,无法对其对齐。
+插件曾声明 peer 为 `0.1.0-rc.6`,而运行时是 `0.2.0-rc.2`;`dsh` 拒绝安装并要求签发 exact-version exemption。根因是当时 dsh 子包**未发布到 npm**,工作区无法对齐。
 
-**两条操作注意**:
+**0.2.1 起子包全部上了 npm**(`@deepseek-ai/dsh-agent@0.2.1-rc.2` 等),于是:
 
-1. 该豁免按 `包名@版本` 键控,当前只有 `…@0.1.0` 与 `…@0.1.1` 两条。因此**升版本号会连带要求在 profile 里补一条新豁免**,否则 profile 重新安装该 bundle 会被拒。M3 因此没有顺手抬版本。
-2. `@deepseek-ai/dsh-agent-preset` 与 `@deepseek-ai/dsh-agent-preset-registry` 在 npm 上**不存在** rc.6 版本(它们随 `0.2.0-rc.2` 才出现),所以本插件的 `package.json` 不再声明它们 —— 内联预设行引用的这两个包由宿主提供(与 `dsh-web-app` 自带预设的做法一致)。本仓库改用 `scripts/ensure-pnpm-junctions.mjs` 从 dsh 伞包把它们提升为工作区 junction,仅供本地构建与校验使用。
+1. 依赖线整体抬到 `0.2.1-rc.2`,工作区 `node_modules` 与用户机器上的运行时**同版本、同 schema**;
+2. 准入由 `engines.dsh: ">=0.2.1-rc.2 <0.3.0-0"` 单独裁决(§6.18),不再走 peer 回退路径,因此**升版本号不再需要在 profile 里补豁免**;
+3. `scripts/ensure-pnpm-junctions.mjs`、`scripts/link-dsh-fallback.mjs` 与 `tests/fixtures/node_modules` 影子目录**已删除** —— 它们只为"两代运行时并存"而存在。
+
+> profile 里历史遗留的 `compatibility.json` 条目(键为 `…@0.1.0` / `…@0.1.1`)留着无害:豁免按 `包名@版本` 精确键控,新版本不会继承,也不需要它们。
 
 ### 6.4 一致性:取消的表示不统一 ✅ 已修(步 1)
 
@@ -310,20 +314,20 @@ ctx.remote.workspaceFiles.changes(sessionId, '.serial', lifetime)               
 
 > 注:loopback 信封另有一套小写码,其中 `'cancelled'` 属于信封自己(`src/index.ts`),与 `SerialProjectErrorCode` 无关。
 
-### 6.5 环境:宿主包 schema 在 rc.6 与 rc.2 之间发生了破坏性变化 🟡
+### 6.5 环境:宿主包 schema 在 rc.6 与 rc.2 之间发生了破坏性变化 ✅ 已解决(0.2.0)
 
-工作区 `node_modules/@deepseek-ai/*` 仍是 `0.1.0-rc.6` 线,而运行时是 `0.2.0-rc.2`(§6.3)。这两条线的**插件配置 schema 并不兼容**,最典型的是 persona:
+工作区 `node_modules/@deepseek-ai/*` 曾停留在 `0.1.0-rc.6` 线,而运行时是 `0.2.x`。这两条线的**插件配置 schema 并不兼容**,最典型的是 persona:
 
-| 包 | rc.6 的 `Config` | rc.2 的 `Config` |
+| 包 | rc.6 的 `Config` | 0.2 线的 `Config` |
 |---|---|---|
 | `@deepseek-ai/dsh-persona` | `{ text (required), complete, includeRuntimeContext }` | `{ prefix (required), suffix, complete, includeRuntimeContext }` |
 | `@deepseek-ai/dsh-agent-instructions` | `{ maxBytes (required), … }` | `{ maxBytes (required), dshHome?, projectRootMarkers?, … }` |
 
-因此内联预设里 `text:` 的写法在 rc.6 上合法、在 rc.2 上**激活即失败**。M3 的声明按**目标运行时 rc.2** 写(`prefix`)。
+内联预设里 `text:` 的写法在 rc.6 上合法、在 0.2 线上**激活即失败**。预设声明按目标运行时写(`prefix`)。
 
-**应对**:`scripts/verify-built.mjs` 不按工作区里那份过期副本校验,而是**显式从 dsh 运行时树**解析每个子行的包并调用其导出的 `Config`,断言"该组合在真实运行时上合法"。
+**0.2.0 的现状**:依赖线与运行时同为 `0.2.1-rc.2`,schema 只剩一套,这个坑从"每次升级都要小心"退化为"不可能踩"。`scripts/verify-built.mjs` 仍然逐行调用目标运行时导出的 `Config` 校验子行配置 —— 这条不是为了兼容旧版,而是为了在**下一次**版本漂移时立刻炸在构建期而不是用户界面上。
 
-更进一步,"预设能不能用"这件事被做成了**机器可判定的**:脚本用运行时自己的 rc.2 包(cordis 4.0.4、`dsh-tools`、`dsh-system-prompt`、`dsh-session-projection`、`dsh-agent`、预设注册表)组一个与线上同构的 roster,再断言预设整棵子行零诊断、每行 `fiberState` 为 ACTIVE。`tests/fixtures/node_modules` 只放 persona 与 agent-instructions 两个影子 junction,把 Loader 的子行解析钉到运行时副本上;本插件自己的 `./agent` 故意**不**放影子,于是它仍从工作区解析——和线上 profile 以 `link:` 装本包时的解析路径一致,因此这条断言连"本插件用 rc.6 依赖调 rc.2 服务"这一真实组合也一起验了。
+`@deepseek-ai/dsh-persona` 在 `0.2.1-rc.2` 上对 `prefix` 的实测:传 `{ text }` 报 `$.prefix missing required value`,传 `{ prefix }` 通过 —— 校验是真的在校验,不是空转。
 
 ### 6.6 陷阱:导入预设注册表的类型会破坏 Schemastery 注解 🟡
 
@@ -678,6 +682,89 @@ change feed 也是这么测的。钉住的是协议行为:`ready` 要 `accept`�
 并且做了完整的能力探测 —— 没有 `document` / `URL.createObjectURL` 或任何一步抛错时只是
 下载不了,文稿仍显示在上面可直接选取复制。绝不为了一个便利功能让面板崩掉。
 
+### 6.18 运行时适配 0.2.0 → 0.2.1-rc.2:两个闸门与一次静默消失(步 9)
+
+这一节是本版**唯一**的功能外改动,记录的是"插件为什么在 0.2.1 上装不上/不出现"。
+
+#### 两个**不同**的闸门
+
+dsh 对第三方 bundle 有两道独立的准入判定,判据来源不同,症状也不同:
+
+| 闸门 | 位置 | 判据 | 失败症状 |
+|---|---|---|---|
+| **安装期** | `dsh-plugin-manager` 的 pnpm 预检 | `evaluatePluginCompatibility(manifest, exemptions)` | 命令直接失败:`installation rejected: Plugin … is incompatible with dsh …` |
+| **启动期** | `dsh-app-boot` 装载 bundle 层 | 同一个函数 | bundle 被**静默跳过**,只进 `skippedBundles`,界面无任何提示 |
+
+两者共用一个函数,而它的规则是:
+
+```js
+// 有 engines.dsh 时由它单独裁决,peerDependencies 一律忽略
+if (Object.hasOwn(engines, "dsh")) return satisfies(runtimeVersion, engines.dsh) ? {} : { "engines.dsh": engines.dsh }
+// 否则退化为:每个 @deepseek-ai/dsh / @deepseek-ai/dsh-* peer 都必须满足
+```
+
+`satisfies()` 用 `{ includePrerelease: true }` —— 少了这个选项,rc 版本永远匹配不上
+自己的范围。**关键点:没有 `engines.dsh` 时,peer 会被当成"DSH 版本要求"来读。**
+
+#### 0.1.1 在 0.2.1-rc.2 上的确切故障
+
+`0.1.1` 的 peer 全是 `0.1.0-rc.6`(那是当时唯一能装到的线),且**没有 `engines.dsh`**,
+于是走 peer 回退路径:
+
+```
+@deepseek-ai/dsh-agent@0.1.0-rc.6 ← 运行时 0.2.1-rc.2 不满足(共 16 条全部 unmet)
+⇒ 整层 bundle 被跳过 ⇒ 侧栏没有「短篇集工作台」,预设列表里没有「短篇集作家」
+```
+
+profile 里那条 `…@0.1.1: ["0.2.0-rc.2"]` 的豁免**救不了它**:豁免按"包名@版本 + 精确
+DSH 版本"双键控,DSH 从 0.2.0-rc.2 升到 0.2.1-rc.2 就不再继承。
+
+用目标运行时自己的评估器实测(`dsh-app-boot@0.2.1-rc.2`):
+
+| manifest | 结果 |
+|---|---|
+| 0.1.1 形态(peer `0.1.0-rc.6`,无 `engines.dsh`) | `{"requirements":{"@deepseek-ai/dsh-agent":"0.1.0-rc.6"},"exempted":false}` |
+| 0.2.0 形态(`engines.dsh: ">=0.2.1-rc.2 <0.3.0-0"`) | `undefined`(接受,且不需要豁免) |
+
+#### 修法:让 `engines.dsh` 单独裁决
+
+```json
+"engines": { "node": "^22.19 || >=24", "dsh": ">=0.2.1-rc.2 <0.3.0-0" }
+```
+
+上界写成 `<0.3.0-0` 而不是 `<0.3.0`:在 `includePrerelease` 下,`<0.3.0` 会把
+`0.3.0-rc.1` 也放进来。实测:
+
+| 版本 | `>=0.2.1-rc.2 <0.3.0-0` |
+|---|---|
+| `0.2.1-rc.2` / `0.2.1-rc.3` / `0.2.2` | ✅ |
+| `0.3.0-rc.1` / `0.3.0` / `1.0.0` | ❌ |
+| `0.2.0-rc.2` | ❌ —— 刻意:那一版配的是 0.1.0-rc.6 子包,本版没在上面验过 |
+
+peer 也改用同一区间:有了 `engines.dsh` 后它们不参与裁决,只作为"这版验证过哪条线"的
+文档,同时让 pnpm 的 peer 解析保持诚实。
+
+#### 同时清掉的三处"两代运行时"脚手架
+
+| 删除项 | 原用途 | 为什么可以删 |
+|---|---|---|
+| `scripts/ensure-pnpm-junctions.mjs` | 把伞包嵌套树里的 rc.2 子包提升成工作区 junction | 子包已上 npm,`pnpm install` 直接装到 |
+| `scripts/link-dsh-fallback.mjs` | 把全局 dsh 安装链进工作区 | 同上 |
+| `tests/fixtures/node_modules` 影子 | 让 fixture 解析到运行时副本而非工作区副本 | 只剩一套,影子没有第二份可指 |
+
+`scripts/verify-built.mjs` 的 `runtimeRoot` 也随之从"伞包嵌套树"改成普通
+`node_modules/@deepseek-ai`:校验用的就是用户机器上跑的同一套包。
+
+#### 顺带确认的两件事
+
+1. **`dsh.client.inject` 必须是空数组**。它只为**动态**客户端包排激活顺序,而本插件的
+   bundle 只向宿主的静态模块表要 `react`。0.1.1 里列的
+   `@deepseek-ai/dsh-client-runtime` 在 0.2.1 上**根本不存在**(该包已更名为
+   `dsh-client-modules`,且不再是客户端运行时),列着它就是"声明一个缺失提供方"。
+2. **槽位契约没变**。`sidebar.panellist`(list:`id`/`order`/`label`)与 `main`
+   (keyed:`key`)在 0.2.1-rc.2 仍然成立,`remote.workspaceFiles` 与 `remote.$stream`
+   也仍在。所以面板代码一行没改 —— 变的只是"能不能被装载"。
+
 ---
 
 ## 7. 未决设计决定
@@ -703,20 +790,20 @@ change feed 也是这么测的。钉住的是协议行为:`ready` 要 `accept`�
 # 类型检查
 node node_modules/typescript/lib/tsc.js --noEmit -p tsconfig.json     # 0 错误
 
-# 构建链(第 0 步会为 rc.2 未发布到 npm 的 dsh 子包建 junction)
-node scripts/ensure-pnpm-junctions.mjs
+# 构建链(不再有 junction 步骤:0.2.1 起 dsh 子包全部可从 npm 安装)
+node scripts/clean-lib.mjs
 node node_modules/typescript/lib/tsc.js -p tsconfig.build.json        # 按文件产出 ESM + 声明
 node scripts/build-bundle.mjs                                          # 9 个客户端模块 → CJS 工厂包
 node scripts/link-self.mjs
-node scripts/verify-built.mjs                                          # Host 装载 + 内联预设声明(含运行时 schema 校验) + 注册表发现 + Client 契约 + 面板 SSR 真渲染
+node scripts/verify-built.mjs                                          # 准入 + Host 装载 + 内联预设(含运行时 schema 校验) + 注册表发现 + Client 契约 + 面板 SSR 真渲染
 
 # 测试
-npx vitest run                                                         # 158 passed
+node node_modules/vitest/vitest.mjs run                                # 158 passed
 
 # 一条命令跑完上述全部 + 打包面不变量
-node scripts/release-check.mjs                                         # 44 项检查
+node scripts/release-check.mjs                                         # 51 项检查
 
-# 组合层验证
+# 组合层验证(profile 需已装本包)
 dsh --profile web --dump-config | Select-String "preset-short-story-writer"
 ```
 
@@ -735,23 +822,30 @@ dsh --profile web --dump-config | Select-String "preset-short-story-writer"
 | `tests/audit-parity.spec.ts` | 3 | **两端巡检逐条一致**:同一个真实项目同时喂给 Host 与面板两条路径;夹具刻意造出**每一类**缺口并逐类点名,避免"两边都漏同一字段"的假一致(§6.17) |
 | `tests/serial-export.spec.ts` | 15 | 整集装配:集名/题记/章序、缺正文不静默丢章、CRLF 归一化、无时间戳因而确定性、**标题层级归一化**(自带标题时下沉且不注入重复章标题、围栏内井号不算标题、最深不超 6 级)(§6.17) |
 
-### 8.1 M3 的实测证据
+### 8.1 实测证据
 
-profile `web`,运行时 `dsh 0.2.0-rc.2`,本包以 `link:F:/Projects/serial-story-writer` 装入。
+**0.2.0(运行时 `dsh 0.2.1-rc.2`)**——用目标运行时自己的评估器与包验证:
+
+| 观测点 | 结果 |
+|---|---|
+| `evaluatePluginCompatibility(manifest, [])`(`dsh-app-boot@0.2.1-rc.2`) | `undefined` —— 无需 any exemption |
+| 同上,喂 0.1.1 形态的 manifest | 拒绝:`requirements: {"@deepseek-ai/dsh-agent":"0.1.0-rc.6"}` |
+| 与线上同构 roster(Cordis 4.0.5 + `dsh-tools`/`dsh-system-prompt`/`dsh-session-projection`/`dsh-agent`/`dsh-agent-preset-registry` 全部 `0.2.1-rc.2`) | 预设 `short-story-writer` 出现在 `agentPresets.list()`,**无 `broken`** |
+| 预设子行 `Config` 逐个校验(persona / agent-instructions / 本插件 `./agent`) | 全部通过;persona 传 `{ text }` 会报 `$.prefix missing required value` |
+| `pnpm install` 后的依赖树 | 83 个 `@deepseek-ai/*` 依赖与伞包声明**零偏差**,无跨版本 junction |
+| `release-check` | 51 项检查通过,158 passed |
+
+**0.1.x 时代(M3,运行时 `dsh 0.2.0-rc.2`)**——历史记录,仅供对照:
 
 | 观测点 | 结果 |
 |---|---|
 | `dsh --profile web --dump-config` | 输出 `preset-short-story-writer` 行,插件列表含 `@leeguanwei/dsh-serial-story/agent` |
-| 运行中 Host 的 `Config.listConfigs` | `include:preset-short-story-writer` → `status: schema`(声明行已激活且 Config 通过 rc.2 schema) |
+| 运行中 Host 的 `Config.listConfigs` | `include:preset-short-story-writer` → `status: schema` |
 | 与线上同构 roster 的 `agentPresets.list()` | `[{ id: "short-story-writer", name: "短篇集作家", order: 50 }]`,**无 `broken`** |
 | 同一 roster 的 `compositionInventory()` | `persona` / `agent-instructions` / `serial-agent` 三行 `fiberState: 2`(ACTIVE) |
 
-最后一行是关键:本插件的 `./agent` 行 ACTIVE 意味着 `apply()` 里的两次
-`ctx.tools.register()` 与 `installDedicatedPresetSurface()` 在 rc.2 宿主服务上真的跑通了
-——尽管本包自己用的是工作区那份 rc.6 `dsh-tools`。
-
-> **仍未验证**:在真实会话里选中「短篇集作家」后,模型工具目录的确切内容(工具面收窄的端到端表现)。
-> 这需要真的开一个会话并选中该预设,当前无法从 Inspect 通道读取花名册或预设作用域内的工具表。
+> **仍未验证**:在真实会话里选中「短篇集作家」后,模型工具目录的确切内容(工具面收窄的端到端表现)。这需要真的开一个会话并选中该预设。
+> **0.2.1-rc.2 上的安装只能在桌面应用的「设置 → 插件」里做**:`desktop` profile 由 Electron 应用独占管理,`dsh plugin --profile desktop …` 会直接拒绝(`profile "desktop" is managed exclusively by the Electron application`)。
 
 > **环境提示**:本机 `pnpm run <script>` 会先触发依赖同步,该步骤在当前 profile 下会失败(需把已有 `node_modules` 目录 rename 为 `.ignored`)。因此上述命令均直接调用,不经 `pnpm run`。
 
@@ -796,15 +890,14 @@ Get-ChildItem lib -Recurse -File | Sort-Object LastWriteTime -Descending | Selec
 | `src/agent.ts` | 两套工具定义 + 审批门 + 审批卡片 |
 | `src/agent-v2.ts` | V2 入口(注入 Workspace registry) |
 | `src/proposal-inbox.ts` | 非权威提案收件箱:JSON 存储、规范化幂等键、上传边界(**不写项目**) |
-| `src/command-rpc.ts` | 供(暂缓的)loopback 通道复用的纯函数读端点 |
 | `src/client/index.ts` | Client 插件:`inject: ['slots','remote','remote.workspaceFiles']` + 两处注册 + Remote 绑定 |
 | `src/client/serial-files.ts` | 只读数据层:`workspaceFiles` Remote 包装、项目快照、故事线推进与人物出场(无 React 依赖) |
 | `src/client/workbench-view.tsx` | 只读工作台面板:世界观树 + 资产视图 + 正文预览 |
 | `src/client/panel-icon.tsx` | 侧栏图标(只用主题继承色) |
 | `cordis.patch.yml` | 组合补丁:Host 行 + **内联预设声明**(M3) |
 | `scripts/build-bundle.mjs` | Client 迷你打包器(带依赖表) |
-| `scripts/verify-built.mjs` | 构建产物契约校验:Client 4 层 + **面板 SSR 真渲染** + 内联预设声明 + 运行时 schema + 注册表发现 |
-| `scripts/ensure-pnpm-junctions.mjs` | 把 rc.2 未发布到 npm 的 dsh 子包从伞包提升为工作区 junction |
+| `scripts/verify-built.mjs` | 构建产物契约校验:**准入判定**(直接调运行时自己的 `evaluatePluginCompatibility`)+ Client 4 层 + **面板 SSR 真渲染** + 内联预设声明 + 运行时 schema + 注册表发现 |
+| `scripts/rebuild.mjs` | 不经 `pnpm run` 的端到端构建包装 |
 | `scripts/link-self.mjs` | 把工作区根暴露为 `@leeguanwei/dsh-serial-story` |
 | `tests/agent-surface.spec.ts` | V1 工具面收窄与审批门的单元测试 |
 | `tests/client-serial-files.spec.ts` | 工作台数据层:修订号对齐、故事线、人物出场、宽容加载 |
@@ -824,3 +917,124 @@ Get-ChildItem lib -Recurse -File | Sort-Object LastWriteTime -Descending | Selec
 | `tests/__snapshots__/` | keyless 快照(必须保留;缺失会让漂移检测失效) |
 | `README.md` | 包的门面文档:定位、四条设计决定、文件布局、工具面、工作台、已知限制 |
 | `docs/features-and-progress.md` | 本文件 |
+
+---
+
+## 10. 升级候选:0.2.1-rc.2 解锁了什么
+
+判定前提:**能升级,而且不是因为"想加功能",而是因为宿主换了一条线,给了以前做不了的三个东西**。
+已经用掉的宿主能力是:工具注册、原生一次性审批、预设内联声明、`sidebar.panellist` + `main`
+槽位、Typert Remote 只读文件、文件变更订阅。**可用但没用**的、且对"写短篇集"有直接价值的,
+收敛成 6 条候选。每条都写清"解决谁的什么问题",以及**是否动那四条设计决定**。
+
+排期只是建议:**U-1 + U-4 是性价比最高的一对**,U-2 需要你先拍板改一条硬约束。
+
+### 10.1 三条还不算功能的"解锁"
+
+| 解锁 | 前一版为什么做不了 | 影响哪条候选 |
+|---|---|---|
+| **子包全部上 npm** | `0.2.0-rc.2` 的子包没发布,只能靠伞包嵌套树 + junction 凑 | U-5 / U-6(要挂 `dsh-tool-subagent`、`dsh-skill` 这类新依赖时,不再需要影子目录) |
+| **`connection.rpc.handle` 的注入断言消失** | 注册 HTTP 通道必崩(§6.1) | U-2 的 B 方案(若真要走浏览器写端点,技术上是通的;但那要动硬约束) |
+| **`engines.dsh` 成为独立裁决** | peer 被当版本要求读,升版本就得补豁免(§6.18) | 所有候选:以后每抬一次线不需要再求豁免 |
+
+### 10.2 六条候选
+
+#### U-1 斜杠命令:`/audit` `/export` `/chronicle`
+
+- **解决什么**:现在这三件事只能靠"跟模型说一句话",而它们本质上**不产生模型消息** ——
+  是人对项目的操作。`dsh-commands` 的语义正是"命令直接对 agent 执行,不产生模型消息",
+  结算结果由 UI 渲染在模型历史之外。
+- **怎么落**:`ctx.commands.register({ name, description, input, handler })`。handler 直接调用
+  已有的纯函数(`serial-audit.ts`、`serial-export.ts`、编年史投影),返回
+  `{ kind: 'success', text }`。**零新逻辑**,三份实现都已在仓库里且有测试。
+- **代价**:小。命令面要挂在哪一层需要决定(跟着预设走 = 只在「短篇集作家」会话里可用,
+  这是对的)。
+- **动设计决定**:**不动**。命令只读,不写项目。
+- **证据**:`dsh-commands@0.2.1-rc.2` 的 README 明确"插件通过 `ctx.commands.register()` 注册命令,
+  提供小写名称、说明、可选 `input` 提示和处理函数"。
+
+#### U-2 面板 → 会话:把"在面板里改稿"接上
+
+- **解决什么**:工作台目前**只读**(README「面板不做的事」)。用户看着某一章想改一段,
+  唯一路径是切回聊天窗、描述位置。这是最大的体验缺口。
+- **两个方案,差别在要不要动硬约束**:
+  - **A(推荐,零新通道)**:面板把"选中范围 + 想要的改法"变成**一条用户消息**发出
+    (走宿主的普通输入路径),模型照旧 `serial_apply_change` + 原生审批。浏览器侧仍然
+    **没有任何写入端点**,`AGENTS.md` 那条硬约束原文不动。
+  - **B**:面板直接投递到提案收件箱(非权威、不碰项目)。技术上 0.2.1 已解锁 HTTP 通道,
+    但它**新增了一个浏览器写端点**,必须改 `AGENTS.md` 的硬约束原文 —— 要改就得说清为什么。
+- **代价**:A 是纯 Client 改动 + 一段引导文案;B 是 Host 新端点 + 契约变更。
+- **动设计决定**:A **不动**;B 动第 4 条(写入必经审批)的边界定义 —— 虽然收件箱不写项目,
+  但"浏览器不写"这条一旦松动,后面每次都想再松一点。
+- **建议**:先 A。A 落地后你会发现 B 想解决的问题大半已经没了。
+
+#### U-3 把 `.serial/` 资产接进宿主的文档预览
+
+- **解决什么**:工作台为了读 `.serial/*.md` 自己写了一个迷你 Markdown 渲染器(600 行级)。
+  宿主本来就有文档预览 Tab(`dsh-client-ui-sidebar-documentpreview`)与 `file` 资源模型,
+  它能给到主题、行号、打字排版。重复实现是纯负债。
+- **怎么落**:按 `dsh-api-workspace-files` 的"Client 文件资源"约定注册资源提供方
+  (`ctx.resources` + 地址语法 `dsh-resource://file/session/<sessionId>/<path>`),把章节正文
+  暴露成可被其它 UI 打开的地址;面板里点章节 = 打开宿主的预览,而不是自己渲染。
+- **代价**:中。要按资源模型的地址语法与生命周期来写,不是"换个组件"那么轻。
+- **动设计决定**:**不动**(仍然只读)。
+- **副作用**:`client-markdown.ts` 与 18 个测试可以退役,但**先别删** —— 面板内联预览
+  (不进 Tab 也能看)是真实需求,两条路可以并存。
+
+#### U-4 会话投影 + 系统提示摘要:省掉每轮的 `serial_read`
+
+- **解决什么**:现在模型每开始一件事都要先 `serial_read` 摸一遍项目状态(集数、章数、
+  待审提案、巡检告警)。这是**每轮固定的一到两次工具往返**,而且是它最确定的一次。
+- **怎么落**:两半。
+  - Host 半:`ctx.sessionProjections.register({ key, stateVersion, stateSchema, init, apply, wire })`
+    —— `apply(state, event)` 纯同步、忽略的事件返回同一引用,缓存与冷读由宿主负责。
+  - 提示半:`ctx.systemPrompt.section()` 注入一段**紧凑摘要**(例:3 集 / 40 章 / 2 条待审提案 /
+    2 处巡检告警 + 每集一行标题)。摘要里不给修订号,模型要写仍然必须 `serial_read` 拿 revision。
+- **代价**:中。要克制:摘要超过十几行就变成每轮固定成本,反而亏。**先量再上**。
+- **动设计决定**:**不动**,但要守住"修订号只从 `serial_read` 来"这条,否则
+  "模型永远不需要复述权威旧文本"的前提会被摘要悄悄破坏。
+
+#### U-5 「一致性审校」子智能体 + skill
+
+- **解决什么**:短篇集的核心质量问题是**跨集连续性**——同一人物在不同集里的口吻、称呼、
+  年龄、关系有没有漂。现在只有一个机械巡检(十种结构码),它查不出"这一年她 17 岁,下一集
+  又写成 16 岁"。
+- **怎么落**:预设里挂 `dsh-tool-subagent`(AGENTS.md 已规定路由:原生 `gpt-5.6-terra` +
+  `xhigh`),给子智能体一个窄任务:只读整集导出 + 人物档案,输出**带章号/段落锚点的差异清单**;
+  再把写作工艺本身做成 `dsh-skill` 随包分发(短篇集的结构、视角纪律、伏笔回收),由预设自动加载。
+- **代价**:中高。子智能体的 token 成本真实存在;而且"审校建议"必须落成**提案**(非权威),
+  不能直接改稿 —— 否则等于绕开审批。
+- **动设计决定**:不动,但依赖决定 7(提案如何变成一次写入)。**U-5 的产出形态就是决定 7 的输入**,
+  两者一起做最省。
+
+#### U-6 批量跨集作业(决定 10 的落地)+ goal 驱动的"写完这一集"
+
+- **解决什么**:写完一集是 8~10 次顺序写入(initialize → 世界 → 人物 → 蓝图 → 时间线 → 章蓝图 × N
+  → 正文 × N),中间任何一步中断都只留下半成品。现在模型得在一个回合里把 10 次审批点完。
+- **怎么落**:两条腿。
+  - **批量写 = 投 N 条提案**(决定 10 的倾向):面板或命令一次生成整集的提案集,人逐条或一次性
+    确认,写入仍走原生审批。
+  - **长跑 = goal**:用 `dsh-goal` 把"写完这一集"变成一个跨回合目标,每回合推进一章并落一条提案,
+    中断可续。这比"在一个回合里硬撑 10 次审批"稳得多。
+- **代价**:高。这是本清单里唯一需要新领域概念(提案集 / 批次 id)的一条。
+- **动设计决定**:不动"单文件原子替换",但给"一次审批只改一个资产"补一层**批次**语义
+  (批次是编排,不是事务)。**不要**为了批量去做多资产原子写入 —— 那会打破第 2、3 条决定的前提。
+
+### 10.3 明确不建议做的
+
+| 想法 | 为什么不 |
+|---|---|
+| 面板直连项目文件的写端点 | 直接违反第 4 条设计决定;一旦有了,审批卡片展示的内容与实际落盘之间就多了一条没人审的路径 |
+| 多资产原子写入 / 事务 | 第 2 条决定(修订号即并发)与第 3 条(落盘即规范字节)都建立在**单文件替换**上,事务会把"哪个字节属于哪次提交"变成新问题 |
+| 把项目存进 SQLite | 项目的卖点是**可 diff、可 git、可手改**的纯文本。换存储等于换产品 |
+| 导入 `.vela` | 领域模型不同(单本 vs 世界观多集),映射表会长期成为第二个事实源。真要做,做成**一次性迁移工具**,不进运行时 |
+| 为"省一次工具调用"把整份资产塞进系统提示 | 与第 1 条决定(模型不复述权威旧文本)直接冲突,且会随项目变大而爆 |
+
+### 10.4 建议排期
+
+| 版本 | 内容 | 理由 |
+|---|---|---|
+| **0.3.0** | U-1 + U-4 | 两者都不动设计决定,都直接减摩擦:命令把"人对项目做的事"从对话里拿出来,摘要把"每轮固定的一次往返"省掉 |
+| **0.4.0** | U-2(A 方案)+ U-3 | 面板从"只读"变成"能发起修改",但仍然没有浏览器写端点;顺带把重复的 Markdown 渲染接回宿主 |
+| **0.5.0** | U-5 + 决定 7 | 审校建议与"提案如何落实"是同一个问题的两面,分开做会返工 |
+| **0.6.0** | U-6 | 依赖前面所有东西:批次语义需要稳定的提案流,长跑需要 goal,而两者都要先有 U-5 的质量约束 |

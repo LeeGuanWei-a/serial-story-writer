@@ -6,7 +6,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import { defineTool, ToolArgsError } from '@deepseek-ai/dsh-tools'
 import type { PreToolDecision, ToolDefinition } from '@deepseek-ai/dsh-tools'
-import type { JsonValue } from '@deepseek-ai/dsh-session'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import z from '@deepseek-ai/schemastery'
 import { SerialProjectError, type AssetRef, type CreativeStrategy, type SerialApplyRequest, type SerialReadRequest, type WorldId, type Revision } from './types.js'
 import {
@@ -40,9 +40,10 @@ interface DedicatedPresetRegistry {
 }
 
 // 本插件依赖的 preset 选中事件。这里自行声明而**不**导入预设注册表包的类型:
-// 0.2.0-rc.2 的 dsh 子包不在 npm 上,工作区里它的 `@deepseek-ai/cordis` 与
-// Schemastery 解析到嵌套实例,导入其类型既拿不到增强,又会破坏本文件的
-// `z<Config>` 注解。
+// 本文件只需要 `composedPreset()` 一个方法,而那个包的类型入口会带进 Schemastery 的
+// 全局增强,把本文件所有 `z<Config>` 注解放大成 `SchemaOutput<…, Volatile<…>>` 形态。
+// (0.1.x 时代还有一层原因 —— 当时的嵌套 rc.2 dsh 与工作区 rc.6 解析到不同的
+// `@deepseek-ai/cordis` 模块身份;0.2.1 起依赖线与运行时同版本,那一层已消失。)
 declare module '@deepseek-ai/cordis' {
   interface Events {
     /** 一个会话把不同的 preset 写进了它的持久日志。 */
