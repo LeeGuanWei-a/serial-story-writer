@@ -1,7 +1,7 @@
 {
   "name": "@leeguanwei/dsh-serial-story",
-  "version": "0.2.0",
-  "description": "A DeepSeek Harness plugin that organizes linked short-story collections under one world, with shared characters across collections and a proposal-gated authoring flow.",
+  "version": "0.2.1",
+  "description": "A DeepSeek Harness plugin for writing linked short-story collections inside one shared world, with character profiles shared across collections and every write gated by native approval.",
   "repository": {
     "type": "git",
     "url": "https://github.com/LeeGuanWei-a/serial-story-writer.git"
@@ -35,11 +35,15 @@
       "default": "./lib/client.js"
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
   },
   "files": [
     "lib/**",
     "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
     "README.md",
     "LICENSE"
   ],
@@ -109,5 +113,6 @@
     "typescript": "^6.0.2",
     "vitest": "^4.1.4"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "icon": "icon.svg"
 }

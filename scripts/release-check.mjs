@@ -121,17 +121,59 @@ for (const emitted of listFiles(join(root, 'lib'), '.js')) {
     `src/${stem}.ts(x) 不存在 —— 这是源文件删除后残留的陈旧产物,会被发布出去`)
 }
 
+/**
+ * 判断一个 manifest 目标是否真的有可解析的文件。
+ *
+ * - 普通路径:按字面查。
+ * - `dir/**`:该目录存在且递归下至少有一个文件(否则声明了却不发布)。
+ * - `./locale/*.json`:同目录下至少有一个匹配后缀的文件。只写通配而不落文件同样是死的
+ *   —— 运行时按 `${specifier}/locale/en.json` 解析,没有文件就静默退化成 package.json
+ *   里的开发者英文。
+ *
+ * @param target 相对仓库根的导出/发布路径。
+ * @returns 是否存在至少一个真实文件。
+ */
+function targetExists(target) {
+  if (!target.includes('*')) return existsSync(join(root, target))
+  if (target.includes('**')) {
+    const dir = join(root, target.slice(0, target.indexOf('**')).replace(/[\\/]+$/, ''))
+    return existsSync(dir) && hasFile(dir)
+  }
+  const absolute = join(root, target)
+  const star = absolute.indexOf('*')
+  const dir = dirname(absolute.slice(0, star).replace(/[\\/]+$/, ''))
+  const suffix = absolute.slice(star + 1)
+  if (!existsSync(dir)) return false
+  return readdirSync(dir).some(name => name.endsWith(suffix))
+}
+
+/**
+ * 目录下(递归)是否存在至少一个普通文件。
+ *
+ * @param dir 绝对目录。
+ * @returns 是否存在文件。
+ */
+function hasFile(dir) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      if (hasFile(join(dir, entry.name))) return true
+    } else {
+      return true
+    }
+  }
+  return false
+}
+
 // exports:每一个目标都必须真实存在。
 for (const [key, value] of Object.entries(manifest.exports ?? {})) {
   const target = typeof value === 'string' ? value : value.default
-  assert(`exports ${key} → ${target}`, typeof target === 'string' && existsSync(join(root, target)),
+  assert(`exports ${key} → ${target}`, typeof target === 'string' && targetExists(target),
     '构建产物里没有这个文件,装上去 import 就会失败')
 }
 
 // files:声明了却不存在 = 对用户的失实陈述。
 for (const entry of manifest.files ?? []) {
-  if (entry.includes('*')) continue
-  assert(`files 声明 ${entry}`, existsSync(join(root, entry)), '声明要发布却没有这个文件')
+  assert(`files 声明 ${entry}`, targetExists(entry), '声明要发布却没有这个文件')
 }
 
 // 打包面必须带上的两件门面物。
@@ -170,8 +212,9 @@ for (const key of ['name', 'version', 'description', 'license', 'repository']) {
 }
 assert('manifest 有 engines.node', typeof manifest.engines?.node === 'string')
 
-// 临时文件不该留在仓库根。
-const strays = readdirSync(root).filter(name => name.startsWith('.tmp'))
+// 临时文件不该留在仓库根。两种形态都要抓:`.tmp*` 是构建脚本自己的命名习惯,
+// `*.tmp` 是一次性辅助文件的常见后缀 —— 后者曾经被 `git add -A` 顺手提交过。
+const strays = readdirSync(root).filter(name => name.startsWith('.tmp') || name.endsWith('.tmp'))
 assert('没有遗留临时文件', strays.length === 0, strays.join(', '))
 
 console.log('\n=== 发布资质汇总 ===')

@@ -26,7 +26,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { Context } from '@deepseek-ai/cordis'
 import Include, { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import { evaluatePluginCompatibility } from '@deepseek-ai/dsh-app-boot'
+import { evaluatePluginCompatibility, readPluginMeta } from '@deepseek-ai/dsh-app-boot'
 import yaml from 'js-yaml'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -43,6 +43,32 @@ for (const packagedLicenseFile of ['LICENSE']) {
   if (!manifest.files.includes(packagedLicenseFile)) {
     throw new Error(`${packagedLicenseFile} must be declared in package files`)
   }
+}
+
+// ── 插件卡片上显示的那两行字 ────────────────────────────────────────────────
+// Plugin Manager 用运行时自己的 `readPluginMeta` 读显示文本:`<包>/locale/en.json`
+// 是必需的入口(其它语言由同目录的兄弟文件补上),字段在 `meta.title` /
+// `meta.description` 下;任一处写错(例如 exports 忘了映射 `./locale/*.json`)
+// 都会**静默退化**成 package.json 里的开发者英文,界面上不报错。所以这里直接调
+// 那个读取器,并断言译文真的读到了。
+const selfBase = pathToFileURL(join(root, 'scripts', 'verify-built.mjs')).href
+const meta = readPluginMeta(manifest.name, selfBase)
+if (meta === undefined) throw new Error('readPluginMeta returned nothing; the package self-link is missing (run scripts/link-self.mjs)')
+if (meta.error !== undefined) throw new Error(`Plugin display metadata is malformed: ${meta.error}`)
+for (const language of ['en', 'zh']) {
+  for (const field of ['title', 'description']) {
+    const value = meta[field]?.[language]
+    if (typeof value !== 'string' || value.trim() === '') {
+      throw new Error(`Plugin display metadata is missing ${field}.${language}; got ${JSON.stringify(meta[field])}. The locale file must be exported as ./locale/*.json and shaped { "meta": { "title", "description" } }.`)
+    }
+  }
+}
+if (typeof meta.icon !== 'string' || !meta.icon.startsWith('data:image/svg+xml')) {
+  throw new Error(`Plugin icon did not resolve to an inlined SVG; got ${JSON.stringify(meta.icon)?.slice(0, 80)}. Declare package.json "icon" or export "./icon".`)
+}
+// 标题不能只是包名 —— 那正是"没配上"时的回退值。
+if (meta.title.zh === manifest.name || meta.title.en === manifest.name) {
+  throw new Error('Plugin display title fell back to the package name, which means the locale files were not read')
 }
 
 // ── 准入判定:直接调用目标运行时自己的评估器 ─────────────────────────────────
